@@ -1,0 +1,66 @@
+# the order of the services being created here matters
+# the services are up and running in the following order
+
+services:
+  # ChromaDB as standalone service
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"  # ChromaDB default port
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - ALLOW_RESET=TRUE
+    # healthcheck:
+    #   test: ["CMD", "pgrep", "-f", "chroma"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+
+  # Ollama service
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    healthcheck:
+      test: ["CMD", "pgrep", "ollama"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # FastAPI application
+  rag-api:
+    build: .
+    ports:
+      - "8000:8000"
+    # these environment variabled override the values in the config.py
+    environment:
+      - DEFAULT_LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DEFAULT_MODEL=phi3:mini
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - CHROMADB_HTTP_URL=http://chromadb:8000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - chromadb
+      - ollama
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  chromadb_data:
+  ollama_data:
